@@ -6,20 +6,45 @@
 // Defining functions
 char *custom_recv_msg(void *socket);
 int send_msg(void *socket, char *msg);
+void notify();
 void get_numbers(struct table *t);
 int mark_number(struct table *t, int key);
 int get_random();
 
 int main(int argc, char **argv)
 {
+    int result = game();
+    if (result)
+    {
+        printf("Sending victory notification to the server\n");
+        notify();
+
+        printf("===============\n\n");
+        printf("You are the winner...\n");
+        printf("===============\n\n");
+    }
+    else
+    {
+        printf("===============\n\n");
+        printf("You lost. Another player won before you...\n");
+        printf("===============\n\n");
+    }
+
+    return 0;
+}
+
+int game()
+{
+    int victorius = 1;
     int remaining = 25;
-    struct table *t = makeTable(25);
+    struct table *t = makeTable(remaining);
     printf("Preparing numbers...\n");
     get_numbers(t);
     printf("Numbers ready...\n");
     printf("=======================\n\n");
     printTable(t);
     printf("=======================\n\n");
+
     //  Prepare our context and publisher
     void *context = zmq_ctx_new();
     void *subscriber = zmq_socket(context, ZMQ_SUB);
@@ -30,8 +55,18 @@ int main(int argc, char **argv)
     while (remaining)
     {
         char *string = custom_recv_msg(subscriber);
+
+        int command;
         int number;
-        sscanf(string, "%d", &number);
+        sscanf(string, "%d %d", &command, &number);
+
+        //if someone won
+        if (!command)
+        {
+            victorius = 0;
+            break;
+        }
+
         printf("Number received: %d. Remaining: %d\n", number, remaining);
         int marked = mark_number(t, number);
 
@@ -40,11 +75,29 @@ int main(int argc, char **argv)
             remaining--;
         }
     }
-    printTable(t);
+    if (victorius)
+        printTable(t);
 
     zmq_close(subscriber);
     zmq_ctx_destroy(context);
-    return 0;
+
+    return victorius;
+}
+
+void notify()
+{
+    void *context = zmq_ctx_new();
+    void *requester = zmq_socket(context, ZMQ_REQ);
+    zmq_connect(requester, "tcp://localhost:5555");
+
+    int result = zmq_send(requester, NULL, 0, 0);
+    if (result != -1)
+    {
+        zmq_recv(requester, NULL, 0, 0);
+    }
+
+    zmq_close(requester);
+    zmq_ctx_destroy(context);
 }
 
 void get_numbers(struct table *t)
