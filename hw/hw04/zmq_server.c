@@ -10,6 +10,7 @@ char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
 int msg_sendmore(void *socket, char *msg);
 int read_file(char *buffer, char *file_name);
+void send_content(void *socket, char *content, size_t chunk_size);
 
 int main(void)
 {
@@ -60,8 +61,8 @@ int main(void)
 
         printf("File size: %zu\n", sb.st_size);
 
-        char reply[sb.st_size];
-        int r = read_file(reply, full_path);
+        char *content = malloc(sb.st_size);
+        int r = read_file(content, full_path);
         if (r != 0)
         {
             printf("Error reading file in: %s", full_path);
@@ -71,11 +72,16 @@ int main(void)
         }
 
         //return with 200
-        sprintf(length, "200 %zu", strlen(reply));
+        sprintf(length, "200 %zu", strlen(content));
+
         msg_sendmore(responder, length);
 
+        // printf("Content:\n%s\n\n", content);
+
+        send_content(responder, content, 255);
+
         //return file
-        msg_send(responder, reply);
+        msg_send(responder, NULL);
     }
 
     zmq_close(responder);
@@ -119,4 +125,31 @@ int read_file(char *buffer, char *file_name)
     }
     fclose(fp);
     return 0;
+}
+
+void send_content(void *socket, char *content, size_t chunk_size)
+{
+    char *buffer = malloc(chunk_size + 1);
+
+    printf("%s\n\n", content + 3060);
+
+    if (buffer)
+    {
+        int pos = 0;
+        while (pos < strlen(content) -1)
+        {
+            size_t len = pos + chunk_size > strlen(content) ? (strlen(content) - pos - 1) : chunk_size;
+            memcpy(buffer, content + pos, len);
+            buffer[chunk_size] = '\0';
+
+            printf("\nPos: %d. Len: %zu\n", pos, len);
+            printf("%s", buffer);
+            
+            //send content
+            msg_sendmore(socket, buffer);
+
+            pos += len;
+        }
+        free(buffer);
+    }
 }

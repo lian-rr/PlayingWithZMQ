@@ -85,6 +85,7 @@ int main(int argc, char **argv)
         while (1)
         {
             line = msg_recv(tserver, 0);
+            printf("Message received: %s\n", line);
             zmq_send(http_server, id, id_size, ZMQ_SNDMORE);
             zmq_send(http_server, line, strlen(line), ZMQ_SNDMORE);
             free(line);
@@ -111,8 +112,8 @@ int main(int argc, char **argv)
 
 char *msg_recv(void *socket, int flag)
 {
-    char buffer[256];
-    int size = zmq_recv(socket, buffer, 255, flag);
+    char buffer[1000];
+    int size = zmq_recv(socket, buffer, 1000, flag);
     if (size == -1)
         return NULL;
     buffer[size] = '\0';
