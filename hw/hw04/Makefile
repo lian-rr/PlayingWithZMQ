@@ -1,4 +1,4 @@
-all: clean hw
+all: hw
 
 hw:
 	gcc http_server.c -o http_server -Llib -lzmq

@@ -9,8 +9,7 @@
 char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
 int msg_sendmore(void *socket, char *msg);
-int read_file(char *buffer, char *file_name);
-void send_content(void *socket, char *content, size_t chunk_size);
+int serve_content(void *socket, size_t buffer_size, char *file_name, size_t file_size);
 
 int main(void)
 {
@@ -32,6 +31,7 @@ int main(void)
 
     while (1)
     {
+        printf("\n===========================\n\n");
         char *request;
         request = msg_recv(responder, 0);
         if (request == NULL)
@@ -54,34 +54,24 @@ int main(void)
         if (stat(full_path, &sb) == -1)
         {
             printf("File not found\n");
+            msg_sendmore(responder, "0");
             //return with status 404
-            msg_send(responder, "404 0");
+            msg_send(responder, "404");
             continue;
         }
 
         printf("File size: %zu\n", sb.st_size);
 
-        char *content = malloc(sb.st_size);
-        int r = read_file(content, full_path);
+        size_t buffer_size = 255;
+
+        int r = serve_content(responder, buffer_size, full_path, sb.st_size);
         if (r != 0)
         {
             printf("Error reading file in: %s", full_path);
             //return with status 500
-            msg_send(responder, "500 0");
+            msg_send(responder, "500");
             continue;
         }
-
-        //return with 200
-        sprintf(length, "200 %zu", strlen(content));
-
-        msg_sendmore(responder, length);
-
-        // printf("Content:\n%s\n\n", content);
-
-        send_content(responder, content, 255);
-
-        //return file
-        msg_send(responder, NULL);
     }
 
     zmq_close(responder);
@@ -101,6 +91,8 @@ char *msg_recv(void *socket, int flag)
 
 int msg_send(void *socket, char *msg)
 {
+    if (msg == NULL)
+        return zmq_send(socket, NULL, 0, 0);
     return zmq_send(socket, msg, strlen(msg), 0);
 }
 
@@ -109,47 +101,29 @@ int msg_sendmore(void *socket, char *msg)
     return zmq_send(socket, msg, strlen(msg), ZMQ_SNDMORE);
 }
 
-int read_file(char *buffer, char *file_name)
+int serve_content(void *socket, size_t buffer_size, char *file_name, size_t file_size)
 {
-    char ch;
     FILE *fp;
-    char bf[1];
+    char *buffer = malloc(buffer_size * sizeof(char));
+    char *len = malloc(sizeof(char) * sizeof(file_size));
 
     fp = fopen(file_name, "r");
     if (fp == NULL)
         return -1;
-    while ((ch = fgetc(fp)) != EOF)
+
+    sprintf(len, "%zu", file_size);
+
+    //send content lenght
+    msg_sendmore(socket, len);
+
+    //send 200
+    msg_sendmore(socket, "200");
+
+    while (fgets(buffer, buffer_size, fp) != NULL)
     {
-        sprintf(bf, "%c", ch);
-        strcat(buffer, bf);
+        msg_sendmore(socket, buffer);
     }
     fclose(fp);
+    msg_send(socket, NULL);
     return 0;
-}
-
-void send_content(void *socket, char *content, size_t chunk_size)
-{
-    char *buffer = malloc(chunk_size + 1);
-
-    printf("%s\n\n", content + 3060);
-
-    if (buffer)
-    {
-        int pos = 0;
-        while (pos < strlen(content) -1)
-        {
-            size_t len = pos + chunk_size > strlen(content) ? (strlen(content) - pos - 1) : chunk_size;
-            memcpy(buffer, content + pos, len);
-            buffer[chunk_size] = '\0';
-
-            printf("\nPos: %d. Len: %zu\n", pos, len);
-            printf("%s", buffer);
-            
-            //send content
-            msg_sendmore(socket, buffer);
-
-            pos += len;
-        }
-        free(buffer);
-    }
 }

@@ -58,7 +58,10 @@ int main(int argc, char **argv)
         msg_send(tserver, request);
 
         line = msg_recv(tserver, 0);
-        sscanf(line, "%d %d", &status, &length);
+        sscanf(line, "%d", &length);
+
+        line = msg_recv(tserver, 0);
+        sscanf(line, "%d", &status);
 
         char *resource = strtok(request, " ");
         resource = strtok(NULL, " ");
@@ -85,7 +88,6 @@ int main(int argc, char **argv)
         while (1)
         {
             line = msg_recv(tserver, 0);
-            printf("Message received: %s\n", line);
             zmq_send(http_server, id, id_size, ZMQ_SNDMORE);
             zmq_send(http_server, line, strlen(line), ZMQ_SNDMORE);
             free(line);
@@ -105,8 +107,6 @@ int main(int argc, char **argv)
     zmq_close(http_server);
     zmq_close(tserver);
     zmq_ctx_destroy(ctx);
-
-    printf("Closing app\n");
     return 0;
 }
 
