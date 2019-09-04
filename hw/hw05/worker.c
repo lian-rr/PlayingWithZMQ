@@ -10,11 +10,20 @@ unsigned long long factorial(int n);
 
 int main()
 {
+    printf("\n======================\n");
+    printf("Initializing server...");
+    printf("\n======================\n");
+
     void *context = zmq_ctx_new();
 
     //  Socket to talk to clients
     void *responder = zmq_socket(context, ZMQ_REP);
     zmq_connect(responder, "tcp://localhost:5560");
+
+    printf("\n====================\n");
+    printf("    Server ready");
+    printf("\n====================\n\n");
+
     while (1)
     {
         // Wait for next request from client
@@ -35,7 +44,6 @@ int main()
         //  Send reply back to client
         int s = msg_send(responder, buffer);
         printf("Size: %d\n", s);
-        
     }
     //  We never get here, but clean up anyhow
     zmq_close(responder);

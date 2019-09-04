@@ -7,6 +7,7 @@
 char *msg_recv(void *socket, int flag);
 int msg_send(void *socket, char *msg);
 int msg_sendmore(void *socket, char *msg);
+void free_data(void *data, void *hint);
 
 int main()
 {
@@ -33,34 +34,58 @@ int main()
     printf("    Server ready");
     printf("\n====================\n\n");
 
+    //Cache
+    unsigned long long cache[20] = {0};
+
+    int n;
+
     while (1)
     {
         int more;
         zmq_msg_t message;
 
-        int pr = zmq_poll(items, 1, -1);
+        int pr = zmq_poll(items, 2, -1);
         assert(pr >= 0);
         if (items[0].revents & ZMQ_POLLIN)
         {
-            printf("\n====================\n");
-            printf("Listening for messages");
-            printf("\n====================\n\n");
             while (1)
             {
 
                 //Get message
                 zmq_msg_init(&message);
+
                 zmq_msg_recv(&message, frontend, 0);
 
                 size_t more_size = sizeof(more);
 
                 zmq_getsockopt(frontend, ZMQ_RCVMORE, &more, &more_size);
-                printf("More? ==> %d\n", more);
-                if (strlen(zmq_msg_data(&message)) > 0)
-                    printf("Message: %s\n", (char *)zmq_msg_data(&message));
 
-                zmq_msg_send(&message, backend, more ? ZMQ_SNDMORE : 0);
+                sscanf(zmq_msg_data(&message), "%d", &n);
+
+                if (n < 19)
+                {
+                    printf("Number received %d\n", n);
+
+                    if (cache[n] == 0)
+                    {
+                        printf("Not in cache\n");
+                        zmq_msg_send(&message, backend, more ? ZMQ_SNDMORE : 0);
+                    }
+                    else
+                    {
+                        char *buffer = malloc(255 * sizeof(char));
+                        sprintf(buffer, "%llu", cache[n]);
+
+                        zmq_msg_t msg;
+                        int rc = zmq_msg_init_data(&msg, buffer, strlen(buffer), free_data, NULL);
+                        assert(rc == 0);
+                        zmq_msg_send(&msg, frontend, more ? ZMQ_SNDMORE : 0);
+
+                        zmq_msg_close(&msg);
+                    }
+                }
                 zmq_msg_close(&message);
+
                 if (!more)
                     break; // Last message part
             }
@@ -78,6 +103,11 @@ int main()
 
                 if (strlen(zmq_msg_data(&message)) > 0)
                     printf("Response: %s\n", (char *)zmq_msg_data(&message));
+
+                unsigned long long f;
+                sscanf(zmq_msg_data(&message), "%llu", &f);
+
+                cache[n] = f;
 
                 zmq_msg_send(&message, frontend, more ? ZMQ_SNDMORE : 0);
                 zmq_msg_close(&message);
@@ -113,4 +143,9 @@ int msg_send(void *socket, char *msg)
 int msg_sendmore(void *socket, char *msg)
 {
     return zmq_send(socket, msg, strlen(msg), ZMQ_SNDMORE);
+}
+
+void free_data(void *data, void *hint)
+{
+    free(data);
 }

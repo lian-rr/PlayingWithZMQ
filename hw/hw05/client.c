@@ -10,6 +10,9 @@ int get_random();
 
 int main()
 {
+  printf("\n======================\n");
+  printf("Initializing server...");
+  printf("\n======================\n");
 
   void *context = zmq_ctx_new();
 
@@ -17,6 +20,10 @@ int main()
   void *requester = zmq_socket(context, ZMQ_REQ);
   int rc = zmq_connect(requester, "tcp://localhost:5559");
   assert(rc == 0);
+
+  printf("\n====================\n");
+  printf("    Server ready");
+  printf("\n====================\n\n");
 
   int i;
   for (i = 0; i < 10; i++)
@@ -28,9 +35,11 @@ int main()
     printf("Number generated: %s\n", rand_string);
 
     msg_send(requester, rand_string);
-    zmq_send(requester, NULL, 0, 0);
     char *string = msg_recv(requester, 0);
     printf("Factorial of %d is: %s\n", rand_value, string);
+
+    sleep(1);
+
     free(string);
   }
   zmq_close(requester);
